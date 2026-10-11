@@ -1,0 +1,5 @@
+### basic test 1
+GET localhost:8080/api/ai/chat
+
+>> basic_test_1/response-{{$timestamp}}.json
+

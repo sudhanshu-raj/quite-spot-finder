@@ -7,7 +7,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.content.Media;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
@@ -100,10 +99,7 @@ public class AIRouteFinderService {
 
         for (SpotAddressesDetails.Place place : spotAddressesDetails.places()) {
             if (place.imageName() != null && !place.imageName().isBlank()) {
-                Resource resource = new ClassPathResource("images/map/" + place.imageName() + ".png");
-                if (!resource.exists()) {
-                    resource = new FileSystemResource(AppConstants.MAP_IMAGE_PATH + place.imageName() + ".png");
-                }
+                Resource resource = new FileSystemResource(AppConstants.MAP_IMAGE_PATH + place.imageName() + ".png");
                 if (resource.exists()) {
                     mediaList.add(Media.builder()
                             .mimeType(MimeTypeUtils.IMAGE_PNG)

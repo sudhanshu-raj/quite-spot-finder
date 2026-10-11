@@ -29,17 +29,20 @@ public class OpenStreetMapService {
 
     private final Logger logger = LoggerFactory.getLogger(OpenStreetMapService.class);
 
-    private final RestClient restClientOverPas;
+    private static final List<String> OVERPASS_ENDPOINTS = List.of(
+            "https://lz4.overpass-api.de/api",
+            "https://overpass-api.de/api",
+            "https://overpass.kumi.systems/api",
+            "https://overpass.private.coffee/api"
+    );
+
+    private final RestClient.Builder restClientBuilder;
     private final RestClient restClientKomoot;
     private final RestClient restClientOSRM;
     private final ImageDownloadService imageDownloadService;
 
-
     public OpenStreetMapService(RestClient.Builder restClientBuilder, ImageDownloadService imageDownloadService) {
-        this.restClientOverPas = restClientBuilder.clone()
-                .baseUrl(AppConstants.OVERPASS_API_BASE_URL)
-                .defaultHeader("User-Agent", "QuietSpotFinder/1.0")
-                .build();
+        this.restClientBuilder = restClientBuilder;
         this.restClientKomoot = restClientBuilder.clone()
                 .baseUrl(AppConstants.KOMOOT_API_BASE_URL)
                 .defaultHeader("User-Agent", "QuietSpotFinder/1.0")
@@ -58,25 +61,92 @@ public class OpenStreetMapService {
             @ToolParam(description = "radius under which we want to find spot and it's in meter") int radiusMeters,
             @ToolParam(description = "limit of how many max results/spots we want to find") int limit) {
         String overpassQl = String.format(Locale.US, """
-            [out:json][timeout:90];
+            [out:json][timeout:25];
             (
-               nwr["leisure"~"^(park|garden)$"]["access"!~"^(private|no|customers)$"](around:%d, %f, %f);
+               nw["leisure"~"^(park|garden)$"]["access"!~"^(private|no|customers)$"](around:%d, %f, %f);
                node["amenity"="bench"]["access"!~"^(private|no)$"](around:%d, %f, %f);
-               node["amenity"="place_of_worship"]["access"!="private"](around:%d, %f, %f);
+               nw["amenity"="place_of_worship"]["access"!="private"](around:%d, %f, %f);
             );
             out center %d;
-            """, radiusMeters, lat, lon, radiusMeters, lat, lon, radiusMeters, lat, lon, radiusMeters, lat, lon, limit);
+            """, radiusMeters, lat, lon, radiusMeters, lat, lon, radiusMeters, lat, lon, limit);
 
         MultiValueMap<String, String> formData = new LinkedMultiValueMap<>();
         formData.add("data", overpassQl);
 
-        return restClientOverPas.post()
-                .uri("/interpreter")
-                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-                .accept(MediaType.APPLICATION_JSON)
-                .body(formData)
-                .retrieve()
-                .body(OverpassResponse.class);
+        for (String endpoint : OVERPASS_ENDPOINTS) {
+            logger.info("Trying overpass endpoint: " + endpoint);
+            try {
+                RestClient client = restClientBuilder.clone()
+                        .baseUrl(endpoint)
+                        .defaultHeader("User-Agent", "QuietSpotFinder/1.0")
+                        .build();
+
+                OverpassResponse response = client.post()
+                        .uri("/interpreter")
+                        .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                        .accept(MediaType.APPLICATION_JSON)
+                        .body(formData)
+                        .retrieve()
+                        .body(OverpassResponse.class);
+
+                if (response != null && response.places() != null && !response.places().isEmpty()) {
+                    return response;
+                }
+            } catch (Exception e) {
+                logger.warn("Overpass endpoint failed: " + endpoint, e);
+            }
+        }
+
+        logger.info("Falling back to Photon OSM search for spots");
+        return findSpotsViaPhoton(lat, lon, limit);
+    }
+
+    private OverpassResponse findSpotsViaPhoton(double lat, double lon, int limit) {
+        try {
+            JsonNode response = restClientBuilder.clone()
+                    .baseUrl("https://photon.komoot.io")
+                    .defaultHeader("User-Agent", "QuietSpotFinder/1.0")
+                    .build()
+                    .get()
+                    .uri(uriBuilder -> uriBuilder
+                            .path("/api/")
+                            .queryParam("q", "park")
+                            .queryParam("lat", lat)
+                            .queryParam("lon", lon)
+                            .queryParam("limit", limit)
+                            .build())
+                    .retrieve()
+                    .body(JsonNode.class);
+
+            if (response == null || !response.has("features")) {
+                return new OverpassResponse(List.of());
+            }
+
+            List<OverpassResponse.Place> places = new ArrayList<>();
+            JsonNode features = response.get("features");
+            for (JsonNode feature : features) {
+                JsonNode coords = feature.path("geometry").path("coordinates");
+                if (!coords.isArray() || coords.size() < 2) {
+                    continue;
+                }
+                double pLon = coords.get(0).asDouble();
+                double pLat = coords.get(1).asDouble();
+                JsonNode props = feature.path("properties");
+                Map<String, String> tags = new HashMap<>();
+                if (props.hasNonNull("osm_key") && props.hasNonNull("osm_value")) {
+                    tags.put(props.get("osm_key").asText(), props.get("osm_value").asText());
+                }
+                if (props.hasNonNull("name")) {
+                    tags.put("name", props.get("name").asText());
+                }
+                long id = props.hasNonNull("osm_id") ? props.get("osm_id").asLong() : 0L;
+                places.add(new OverpassResponse.Place(id, "node", pLat, pLon, null, tags));
+            }
+            return new OverpassResponse(places);
+        } catch (Exception e) {
+            logger.error("Photon fallback failed", e);
+            return new OverpassResponse(List.of());
+        }
     }
     
     @Tool(description = "Get the detail of the place/address like what's it's type and it's complete address by placeLatitude/placeLongitude")

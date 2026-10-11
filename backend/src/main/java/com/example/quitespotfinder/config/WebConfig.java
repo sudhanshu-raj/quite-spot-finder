@@ -28,8 +28,16 @@ public class WebConfig implements WebMvcConfigurer {
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
-        String imageLocation = Path.of(AppConstants.MAP_IMAGE_PATH).toAbsolutePath().toUri().toString();
+        Path imagePath = Path.of(AppConstants.MAP_IMAGE_PATH).toAbsolutePath().normalize();
+        try {
+            java.nio.file.Files.createDirectories(imagePath);
+        } catch (Exception ignored) {
+        }
+        String imageLocation = imagePath.toUri().toString();
+        if (!imageLocation.endsWith("/")) {
+            imageLocation += "/";
+        }
         registry.addResourceHandler("/api/images/**")
-                .addResourceLocations(imageLocation, "classpath:/images/map/");
+                .addResourceLocations(imageLocation);
     }
 }

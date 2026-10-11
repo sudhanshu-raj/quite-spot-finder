@@ -1,8 +1,10 @@
 package com.example.quitespotfinder;
 
+import com.example.quitespotfinder.dto.OverpassResponse;
 import com.example.quitespotfinder.dto.RouteResult;
 import com.example.quitespotfinder.dto.SpotAddressesDetails;
 import com.example.quitespotfinder.services.AIRouteFinderService;
+import com.example.quitespotfinder.services.OpenStreetMapService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -20,13 +22,24 @@ public class Test1 {
     @Autowired
     private AIRouteFinderService aiRouteFinderService;
     
+    @Autowired
+    private OpenStreetMapService openStreetMapService;
+    
+    @Test
+    public void test() {
+        OverpassResponse response = openStreetMapService.findQuietSpots(28.540823271124275, 77.33931663661876, 200, 20);
+        System.out.println(response);
+        assertTrue(true);
+        
+    }
+    
     @Test
     public void test1() throws Exception {
         
 
-        SpotAddressesDetails result = aiRouteFinderService.filterTheSpots(getSpotAddressesDetails());
-        System.out.println("llm filter the result");
-        System.out.println(result);
+//        SpotAddressesDetails result = aiRouteFinderService.filterTheSpots(getSpotAddressesDetails());
+//        System.out.println("llm filter the result");
+//        System.out.println(result);
         assertTrue(true);
     }
     
