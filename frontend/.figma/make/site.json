@@ -1,0 +1,10 @@
+{
+  "description": "Helps users find nearby quiet, relaxing outdoor spots with location details and maps, encouraging a refreshing break from indoor routines.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

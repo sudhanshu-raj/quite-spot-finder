@@ -179,7 +179,7 @@ public class OpenStreetMapService {
                         placeLon,
                         place.tags(),
                         details,
-                        imageName+".png",
+                        imageName,
                         routeResult
                 );
                 addressDetailList.add(formattedData);
